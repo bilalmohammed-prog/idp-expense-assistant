@@ -24,6 +24,7 @@ import {
   ChevronDown,
     Zap,       // NEW
   Keyboard,
+  Search,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -146,7 +147,80 @@ export default function DashboardPage() {
 
   // Delete Category Modal State
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
+    // Global search state
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
+  const searchContainerRef = React.useRef<HTMLDivElement>(null);
+  const categoryCardRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const [highlightedCategoryId, setHighlightedCategoryId] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (!isSearchFocused) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isSearchFocused]);
+
+  // Search results: matching categories and matching expenses (joined with their category)
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return { matchedCategories: [], matchedExpenses: [] };
+
+    const matchedCategories = categories.filter((c) =>
+      c.name.toLowerCase().includes(q)
+    );
+
+    const matchedExpenses = expenses
+      .filter((e) => e.name.toLowerCase().includes(q))
+      .map((e) => ({
+        expense: e,
+        category: categories.find((c) => c.id === e.categoryId) || null,
+      }))
+      .filter((item) => item.category !== null)
+      .slice(0, 8); // cap results shown
+
+    return { matchedCategories, matchedExpenses };
+  }, [searchQuery, categories, expenses]);
+
+  const hasSearchResults =
+    searchResults.matchedCategories.length > 0 || searchResults.matchedExpenses.length > 0;
+
+  // Jump to a category card, highlight it briefly, and optionally open View All
+  const jumpToCategory = (cat: Category, openModal: boolean) => {
+    setSearchQuery("");
+    setIsSearchFocused(false);
+
+    const el = categoryCardRefs.current[cat.id];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    setHighlightedCategoryId(cat.id);
+    window.setTimeout(() => setHighlightedCategoryId(null), 1800);
+
+    if (openModal) {
+      // slight delay so scroll starts before modal opens
+      window.setTimeout(() => setViewAllCategory(cat), 300);
+    }
+  };
+
+  const handleCategoryResultClick = (cat: Category) => {
+    jumpToCategory(cat, false);
+  };
+
+  const handleExpenseResultClick = (exp: Expense, cat: Category) => {
+    // Is this expense in the category's visible "Last 5"?
+    const catExpenses = expenses
+      .filter((e) => e.categoryId === cat.id)
+      .sort((a, b) => b.timestamp - a.timestamp);
+    const isInLastFive = catExpenses.slice(0, 5).some((e) => e.id === exp.id);
+
+    jumpToCategory(cat, !isInLastFive);
+  };
   // Theme support (only light and dark)
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
@@ -345,8 +419,8 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
       {/* Top Header Navigation */}
       <header className="border-b border-border/40 bg-card/60 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div>
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          <div className="flex-shrink-0">
             <h1 className="font-bold text-xl tracking-tight leading-none text-foreground">
               Dashboard
             </h1>
@@ -354,6 +428,96 @@ export default function DashboardPage() {
               Track your expenses. Build a better tomorrow.
             </p>
           </div>
+
+          {/* Global Search Bar */}
+          <div className="relative flex-1 max-w-md hidden md:block" ref={searchContainerRef}>
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setIsSearchFocused(true)}
+              placeholder="Search expenses or categories..."
+              className="w-full h-10 pl-10 pr-4 rounded-xl border border-input bg-background/50 focus:bg-background text-foreground text-sm font-medium focus:ring-2 focus:ring-primary focus:outline-none transition-all placeholder:text-muted-foreground"
+            />
+
+            {/* Results dropdown */}
+            {isSearchFocused && searchQuery.trim() && (
+              <div className="absolute left-0 right-0 top-full mt-2 z-40 rounded-xl border border-border bg-card text-card-foreground shadow-lg max-h-96 overflow-y-auto animate-in fade-in slide-in-from-top-1 duration-150">
+                {!hasSearchResults ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    No matches found
+                  </div>
+                ) : (
+                  <div className="p-2 space-y-1">
+                    {searchResults.matchedCategories.length > 0 && (
+                      <div>
+                        <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Categories
+                        </p>
+                        {searchResults.matchedCategories.map((cat) => (
+                          <button
+                            key={cat.id}
+                            type="button"
+                            onClick={() => handleCategoryResultClick(cat)}
+                            className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted/60 transition-colors text-left cursor-pointer"
+                          >
+                            <div
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0"
+                              style={{ backgroundColor: cat.color }}
+                            >
+                              {renderCategoryIcon(cat.iconName, "w-4 h-4")}
+                            </div>
+                            <span className="text-sm font-semibold text-foreground truncate">
+                              {cat.name}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {searchResults.matchedExpenses.length > 0 && (
+                      <div>
+                        <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Expenses
+                        </p>
+                        {searchResults.matchedExpenses.map(({ expense, category }) => (
+                          <button
+                            key={expense.id}
+                            type="button"
+                            onClick={() => category && handleExpenseResultClick(expense, category)}
+                            className="w-full flex items-center justify-between gap-3 px-2 py-2 rounded-lg hover:bg-muted/60 transition-colors text-left cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div
+                                className="w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0"
+                                style={{ backgroundColor: category?.color }}
+                              >
+                                {category && renderCategoryIcon(category.iconName, "w-4 h-4")}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-foreground truncate">
+                                  {expense.name}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground truncate">
+                                  {category?.name} · {expense.date}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-xs font-bold text-foreground tabular-nums flex-shrink-0">
+                              ₹ {formatINR(expense.amount)}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Theme switcher: Light / Dark Mode only */}
 
           {/* Theme switcher: Light / Dark Mode only */}
           {mounted && (
@@ -639,8 +803,11 @@ export default function DashboardPage() {
               const isDragOver = dragOverCategoryId === cat.id && draggedCategoryId !== cat.id;
 
               return (
-                <div
+                                <div
                   key={cat.id}
+                  ref={(el) => {
+                    categoryCardRefs.current[cat.id] = el;
+                  }}
                   draggable
                   onDragStart={(e) => handleDragStart(e, cat.id)}
                   onDragOver={(e) => handleDragOver(e, cat.id)}
@@ -651,6 +818,8 @@ export default function DashboardPage() {
                       ? "opacity-40 scale-[0.98] border-dashed border-primary"
                       : isDragOver
                       ? "border-primary ring-2 ring-primary/40 scale-[1.02]"
+                      : highlightedCategoryId === cat.id
+                      ? "border-primary ring-4 ring-primary/50 scale-[1.02]"
                       : "border-border"
                   }`}
                 >
