@@ -21,6 +21,9 @@ import {
   Package,
   Sparkles,
   GripVertical,
+  ChevronDown,
+    Zap,       // NEW
+  Keyboard,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -56,7 +59,7 @@ const COLOR_PALETTE = [
   { label: "Teal", hex: "#14B8A6" },
   { label: "Fuchsia", hex: "#D946EF" },
 ];
-
+const AMOUNT_TOKENS = [1, 2, 5, 10, 20, 50, 100, 200, 500];
 // Available icons for categories
 const ICON_OPTIONS = [
   { name: "Utensils", label: "Food", icon: Utensils },
@@ -147,7 +150,29 @@ export default function DashboardPage() {
   // Theme support (only light and dark)
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
+    // Amount quick-add dropdown state
+  const [isAmountDropdownOpen, setIsAmountDropdownOpen] = useState<boolean>(false);
+  const amountDropdownRef = React.useRef<HTMLDivElement>(null);
 
+  React.useEffect(() => {
+    if (!isAmountDropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (amountDropdownRef.current && !amountDropdownRef.current.contains(e.target as Node)) {
+        setIsAmountDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isAmountDropdownOpen]);
+
+  const handleTokenClick = (value: number) => {
+    setAmountInput((prev) => {
+      const current = parseFloat(prev) || 0;
+      const next = current + value;
+      // strip trailing .0 style artifacts, keep clean number string
+      return Number.isInteger(next) ? String(next) : String(next);
+    });
+  };
   React.useEffect(() => {
     setMounted(true);
   }, []);
@@ -447,7 +472,7 @@ export default function DashboardPage() {
 
           <form onSubmit={handleAddExpense} className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-              {/* Amount Field */}
+                            {/* Amount Field */}
               <div className="space-y-1.5">
                 <label
                   htmlFor="expense-amount"
@@ -455,8 +480,8 @@ export default function DashboardPage() {
                 >
                   ₹ Amount
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold">
+                <div className="relative" ref={amountDropdownRef}>
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground font-semibold pointer-events-none">
                     ₹
                   </span>
                   <input
@@ -468,8 +493,63 @@ export default function DashboardPage() {
                     value={amountInput}
                     onChange={(e) => setAmountInput(e.target.value)}
                     required
-                    className="w-full h-11 pl-8 pr-4 rounded-xl border border-input bg-background/50 focus:bg-background text-foreground text-sm font-medium focus:ring-2 focus:ring-primary focus:outline-none transition-all placeholder:text-muted-foreground"
+                    className="w-full h-11 pl-8 pr-10 rounded-xl border border-input bg-background/50 focus:bg-background text-foreground text-sm font-medium focus:ring-2 focus:ring-primary focus:outline-none transition-all placeholder:text-muted-foreground [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setIsAmountDropdownOpen((prev) => !prev)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/70 transition-colors cursor-pointer"
+                    title="Quick add amount"
+                  >
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform duration-200 ${
+                        isAmountDropdownOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                                    {/* Quick-add token dropdown */}
+                  {isAmountDropdownOpen && (
+                    <div className="absolute left-0 right-0 top-full mt-2 z-40 rounded-xl border border-border bg-card text-card-foreground shadow-lg p-4 animate-in fade-in slide-in-from-top-1 duration-150">
+                      {/* Header row */}
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-1.5">
+                          <Zap className="w-3.5 h-3.5 text-primary fill-primary" />
+                          <span className="text-sm font-bold text-foreground">Quick Amounts</span>
+                        </div>
+                        <span className="text-[11px] text-muted-foreground">Click to add</span>
+                      </div>
+
+                      {/* Token grid */}
+                      <div className="grid grid-cols-3 gap-2.5">
+                        {AMOUNT_TOKENS.map((val) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => handleTokenClick(val)}
+                            className="h-11 rounded-lg border border-border bg-muted/40 hover:border-primary hover:bg-primary/10 hover:text-primary text-foreground text-sm font-bold flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                          >
+                            ₹ {val}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Footer row */}
+                      <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/50">
+                        <div className="flex items-center gap-1.5 text-muted-foreground">
+                          <Keyboard className="w-3.5 h-3.5" />
+                          <span className="text-[11px]">Or type a custom amount</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setAmountInput("")}
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-muted/60 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
