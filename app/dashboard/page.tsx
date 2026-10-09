@@ -27,6 +27,8 @@ import {
   Search,
 } from "lucide-react";
 import { useTheme } from "next-themes";
+import Link from "next/link";
+import { History as HistoryIcon } from "lucide-react";
 
 // Types
 interface Expense {
@@ -120,11 +122,18 @@ const INITIAL_EXPENSES: Expense[] = [
   { id: "exp-22", name: "Desk Stationery & Pens", amount: 500, categoryId: "cat-6", date: "2026-09-10", timestamp: now - 2500 },
   { id: "exp-23", name: "Express Courier Parcel", amount: 200, categoryId: "cat-6", date: "2026-09-03", timestamp: now - 3500 },
 ];
-
+const rowtoexpense = (r: any, cats: Category[]): Expense => ({
+id: String(r.id),
+name: r.item,
+amount: Number(r.amount),
+categoryId: (cats.find((c) => c.name === r.category) || cats.find((c) => c.name === "Others") || cats[0]).id,
+date: r.created_at.split("T")[0],
+timestamp: new Date(r.created_at).getTime(),
+})
 export default function DashboardPage() {
   // State
   const [categories, setCategories] = useState<Category[]>(INITIAL_CATEGORIES);
-  const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
 
   // Drag and Drop reordering state
   const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null);
@@ -146,6 +155,16 @@ export default function DashboardPage() {
   const [viewAllCategory, setViewAllCategory] = useState<Category | null>(null);
 
   // Delete Category Modal State
+  const loadexpenses = async () => {
+    const res = await fetch("/api/expenditure")
+    if (res.ok) {
+      const rows = await res.json()
+      setExpenses(rows.map((r: any) => rowtoexpense(r, categories)))
+    }
+  }
+  React.useEffect(() => {
+    loadexpenses()
+  }, [])
   const [categoryToDelete, setCategoryToDelete] = useState<Category | null>(null);
     // Global search state
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -284,27 +303,23 @@ export default function DashboardPage() {
   }, [categories, expenses, totalExpenditure]);
 
   // Handlers
-  const handleAddExpense = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amountNum = parseFloat(amountInput);
-    if (isNaN(amountNum) || amountNum <= 0 || !nameInput.trim() || !categorySelect) {
-      return;
-    }
-
-    const newExpense: Expense = {
-      id: `exp-${Date.now()}`,
-      name: nameInput.trim(),
-      amount: amountNum,
-      categoryId: categorySelect,
-      date: new Date().toISOString().split("T")[0],
-      timestamp: Date.now(),
-    };
-
-    setExpenses((prev) => [newExpense, ...prev]);
-    setAmountInput("");
-    setNameInput("");
-    setCategorySelect("");
-  };
+ const handleAddExpense = async (e: React.FormEvent) => {
+  e.preventDefault()
+  const amountNum = parseFloat(amountInput)
+  if (isNaN(amountNum) || amountNum <= 0 || !nameInput.trim() || !categorySelect) return
+  const cat = categories.find((c) => c.id === categorySelect)
+  if (!cat) return
+  const res = await fetch("/api/expenditure", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ category: cat.name, item: nameInput.trim(), amount: amountNum }),
+  })
+  if (!res.ok) return
+  await loadexpenses()
+  setAmountInput("")
+  setNameInput("")
+  setCategorySelect("")
+}
 
   const handleOpenCreateCategory = () => {
     setEditingCategory(null);
@@ -354,9 +369,10 @@ export default function DashboardPage() {
     setCategoryToDelete(null);
   };
 
-  const handleDeleteExpenseItem = (expenseId: string) => {
-    setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
-  };
+  const handleDeleteExpenseItem = async (expenseId: string) => {
+    const res = await fetch(`/api/expenditure?id=${expenseId}`, { method: "DELETE" })
+    if (res.ok) setExpenses((prev) => prev.filter((e) => e.id !== expenseId))
+  }
 
   // Drag and drop handlers for category cards
   const handleDragStart = (e: React.DragEvent, id: string) => {
@@ -520,6 +536,10 @@ export default function DashboardPage() {
           {/* Theme switcher: Light / Dark Mode only */}
 
           {/* Theme switcher: Light / Dark Mode only */}
+          <Link href="/dashboard/history" className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/70 hover:bg-muted border border-border/60 text-xs font-semibold text-foreground transition-all shadow-sm active:scale-95">
+          <HistoryIcon className="w-4 h-4" />
+          <span>History</span>
+          </Link>
           {mounted && (
             <button
               type="button"
