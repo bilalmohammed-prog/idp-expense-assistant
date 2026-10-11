@@ -536,30 +536,8 @@ export default function DashboardPage() {
           {/* Theme switcher: Light / Dark Mode only */}
 
           {/* Theme switcher: Light / Dark Mode only */}
-          <Link href="/dashboard/history" className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/70 hover:bg-muted border border-border/60 text-xs font-semibold text-foreground transition-all shadow-sm active:scale-95">
-          <HistoryIcon className="w-4 h-4" />
-          <span>History</span>
-          </Link>
-          {mounted && (
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/70 hover:bg-muted border border-border/60 text-xs font-semibold text-foreground transition-all shadow-sm active:scale-95 cursor-pointer"
-              title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            >
-              {isDark ? (
-                <>
-                  <Sun className="w-4 h-4 text-amber-500" />
-                  <span>Light</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="w-4 h-4 text-indigo-500" />
-                  <span>Dark</span>
-                </>
-              )}
-            </button>
-          )}
+          
+
         </div>
       </header>
 
