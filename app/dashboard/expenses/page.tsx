@@ -154,6 +154,12 @@ export default function DashboardPage() {
   // View All Expenses Modal State
   const [viewAllCategory, setViewAllCategory] = useState<Category | null>(null);
 
+  const [expenseToDelete, setExpenseToDelete] =
+  useState<Expense | null>(null);
+
+const [isDeletingExpense, setIsDeletingExpense] =
+  useState(false);
+
   // Delete Category Modal State
   const loadexpenses = async () => {
     const res = await fetch("/api/expenditure")
@@ -369,10 +375,47 @@ export default function DashboardPage() {
     setCategoryToDelete(null);
   };
 
-  const handleDeleteExpenseItem = async (expenseId: string) => {
-    const res = await fetch(`/api/expenditure?id=${expenseId}`, { method: "DELETE" })
-    if (res.ok) setExpenses((prev) => prev.filter((e) => e.id !== expenseId))
+  
+const handleDeleteExpenseItem = (expenseId: string) => {
+  const expense = expenses.find((e) => e.id === expenseId);
+
+  if (expense) {
+    setExpenseToDelete(expense);
   }
+};
+
+const confirmDeleteExpense = async (refundWallet: boolean) => {
+  if (!expenseToDelete || isDeletingExpense) return;
+
+  setIsDeletingExpense(true);
+
+  try {
+    const res = await fetch(
+      `/api/expenditure?id=${encodeURIComponent(
+        expenseToDelete.id
+      )}&refundWallet=${refundWallet}`,
+      { method: "DELETE" }
+    );
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      window.alert(result.error ?? "Could not delete expense");
+      return;
+    }
+
+    setExpenses((prev) =>
+      prev.filter((e) => e.id !== expenseToDelete.id)
+    );
+
+    setExpenseToDelete(null);
+  } catch {
+    window.alert("Something went wrong. Please try again.");
+  } finally {
+    setIsDeletingExpense(false);
+  }
+};
+
 
   // Drag and drop handlers for category cards
   const handleDragStart = (e: React.DragEvent, id: string) => {
@@ -1179,6 +1222,75 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+{/* DELETE EXPENSE CONFIRMATION MODAL */}
+{expenseToDelete && (
+  <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl space-y-5">
+      <div className="w-12 h-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center mx-auto">
+        <AlertCircle className="w-6 h-6" />
+      </div>
+
+      <div className="text-center space-y-2">
+        <h3 className="font-bold text-lg text-foreground">
+          Delete this expense?
+        </h3>
+
+        <p className="text-sm text-muted-foreground">
+          You're deleting{" "}
+          <span className="font-semibold text-foreground">
+            "{expenseToDelete.name}"
+          </span>{" "}
+          worth{" "}
+          <span className="font-semibold text-foreground">
+            ₹{formatINR(expenseToDelete.amount)}
+          </span>
+          . How would you like to handle the wallet balance?
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        <button
+          type="button"
+          disabled={isDeletingExpense}
+          onClick={() => confirmDeleteExpense(true)}
+          className="w-full rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 p-3 text-left transition-colors"
+        >
+          <span className="block font-semibold text-sm">
+            Delete & refund wallet
+          </span>
+          <span className="block text-xs opacity-80 mt-1">
+            Add ₹{formatINR(expenseToDelete.amount)} back to your wallet.
+          </span>
+        </button>
+
+        <button
+          type="button"
+          disabled={isDeletingExpense}
+          onClick={() => confirmDeleteExpense(false)}
+          className="w-full rounded-xl border border-border bg-background hover:bg-muted disabled:opacity-50 p-3 text-left transition-colors"
+        >
+          <span className="block font-semibold text-sm text-foreground">
+            Delete without refund
+          </span>
+          <span className="block text-xs text-muted-foreground mt-1">
+            Stop tracking this expense without changing your wallet balance.
+          </span>
+        </button>
+
+        <button
+          type="button"
+          disabled={isDeletingExpense}
+          onClick={() => setExpenseToDelete(null)}
+          className="w-full h-10 rounded-xl text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
+        >
+          Keep expense
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
     </div>
   );
 }
